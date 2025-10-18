@@ -118,7 +118,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-[#0C648E] via-[#0C648E]/90 to-[#0C648E]/80">
       <Header />
       <ChatbotSelector selected={selectedChatbot} onSelect={handleChatbotChange} />
       <main className="flex-1 overflow-hidden">
