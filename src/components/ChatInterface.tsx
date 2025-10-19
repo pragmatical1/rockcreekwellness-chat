@@ -53,8 +53,8 @@ export function ChatInterface({ messages, onSendMessage, isLoading, disabled = f
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-4xl mx-auto space-y-4">
           {messages.length === 0 && (
-            <div className="text-center text-gray-500 mt-12">
-              <p className="text-lg">Welcome to Rock Creek Wellness Assistant</p>
+            <div className="text-center text-gray-700 mt-12">
+              <p className="text-lg font-medium">Welcome to Rock Creek Wellness Assistant</p>
               <p className="text-sm mt-2">How can I help you today?</p>
             </div>
           )}
