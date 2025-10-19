@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { Activity } from 'lucide-react';
 
 interface LoginScreenProps {
   onLogin: (credential: string) => void;
@@ -29,15 +28,23 @@ export function LoginScreen({ onLogin, error }: LoginScreenProps) {
   }, [onLogin]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-b from-[#0C648E] to-white flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
         <div className="flex justify-center mb-6">
-          <Activity className="w-16 h-16 text-teal-600" />
+          <img
+            src="/nurse-assistant-chatbot-icon.jpg"
+            alt="Nursing Assistant"
+            className="w-24 h-24 rounded-full"
+          />
         </div>
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">
-          Rock Creek Wellness
-        </h1>
-        <h2 className="text-lg text-gray-600 mb-8">Nursing Assistant</h2>
+        <div className="flex justify-center mb-2">
+          <img
+            src="/RCW-Logo-Main.png"
+            alt="Rock Creek Wellness"
+            className="h-12"
+          />
+        </div>
+        <h2 className="text-xl font-semibold text-gray-800 mb-8">AI Agent Chatbot</h2>
 
         {error && (
           <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-md">
