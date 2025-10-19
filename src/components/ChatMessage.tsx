@@ -30,12 +30,33 @@ export function ChatMessage({ message }: ChatMessageProps) {
         {isUser ? (
           <p className="text-gray-800 whitespace-pre-wrap">{message.content}</p>
         ) : (
-          <div className="prose prose-sm max-w-none prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline">
+          <div className="prose prose-sm max-w-none prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline prose-strong:font-bold">
             <ReactMarkdown
               components={{
-                a: ({ node, ...props }) => (
-                  <a {...props} target="_blank" rel="noopener noreferrer" />
-                ),
+                a: ({ node, ...props }) => {
+                  const href = props.href || '';
+                  const isSource = href.startsWith('http');
+                  return (
+                    <a
+                      {...props}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={isSource ? { color: '#0C648E' } : undefined}
+                    />
+                  );
+                },
+                p: ({ node, ...props }) => {
+                  const content = props.children?.toString() || '';
+                  if (content.startsWith('Sources:')) {
+                    return (
+                      <p {...props}>
+                        <strong>Sources:</strong>
+                        {content.substring(8)}
+                      </p>
+                    );
+                  }
+                  return <p {...props} />;
+                },
               }}
             >
               {message.content}
@@ -49,7 +70,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
           <img
             src="/RCW-Icon-Reversed.png"
             alt="You"
-            className="w-8 h-8 rounded-full object-cover bg-white p-1"
+            className="w-8 h-8 rounded-full object-cover"
           />
         </div>
       )}
