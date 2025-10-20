@@ -30,8 +30,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
         {isUser ? (
           <p className="text-gray-800 whitespace-pre-wrap">{message.content}</p>
         ) : (
-          <div className="prose prose-sm max-w-none prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline prose-strong:font-bold">
+          <div className="prose prose-sm max-w-none prose-a:text-teal-600 prose-a:no-underline hover:prose-a:underline prose-strong:font-bold prose-p:mb-4 prose-ul:my-2 prose-li:my-1">
             <ReactMarkdown
+              skipHtml={false}
               components={{
                 a: ({ node, ...props }) => {
                   const href = props.href || '';
@@ -45,17 +46,21 @@ export function ChatMessage({ message }: ChatMessageProps) {
                     />
                   );
                 },
-                p: ({ node, ...props }) => {
-                  const content = props.children?.toString() || '';
-                  if (content.startsWith('Sources:')) {
+                p: ({ node, children, ...props }) => {
+                  // Check if the paragraph contains "Sources:" text
+                  const textContent = typeof children === 'string' ? children :
+                    Array.isArray(children) ? children.join('') : '';
+
+                  if (typeof textContent === 'string' && textContent.trim().startsWith('Sources:')) {
+                    const afterSources = textContent.substring(textContent.indexOf('Sources:') + 8);
                     return (
                       <p {...props}>
                         <strong>Sources:</strong>
-                        {content.substring(8)}
+                        {afterSources}
                       </p>
                     );
                   }
-                  return <p {...props} />;
+                  return <p {...props}>{children}</p>;
                 },
               }}
             >
