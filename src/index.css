@@ -11,9 +11,17 @@
   margin-bottom: 0;
 }
 
-/* Ensure list spacing */
-.prose ul,
+/* Ensure list spacing and bullet points */
+.prose ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
 .prose ol {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
 }
