@@ -10,6 +10,18 @@ const WEBHOOK_TOKENS = {
   sop: import.meta.env.VITE_N8N_WEBHOOK_TOKEN_SOP || '',
 };
 
+function getOrCreateSessionId(): string {
+  const SESSION_KEY = 'nurse_assistant_session_id';
+  let sessionId = sessionStorage.getItem(SESSION_KEY);
+
+  if (!sessionId) {
+    sessionId = crypto.randomUUID();
+    sessionStorage.setItem(SESSION_KEY, sessionId);
+  }
+
+  return sessionId;
+}
+
 export async function sendMessageToWebhook(
   message: string,
   chatbotType: ChatbotType
@@ -25,6 +37,8 @@ export async function sendMessageToWebhook(
     throw new Error('Webhook token not configured for this chatbot');
   }
 
+  const sessionId = getOrCreateSessionId();
+
   const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: {
@@ -32,7 +46,10 @@ export async function sendMessageToWebhook(
       'Authorization': `Bearer ${webhookToken}`,
       'Origin': 'https://chat.rockcreekwellness.com',
     },
-    body: JSON.stringify({ text: message }),
+    body: JSON.stringify({
+      text: message,
+      sessionId: sessionId
+    }),
   });
 
   if (response.status === 401) {
