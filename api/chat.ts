@@ -26,6 +26,7 @@ const WEBHOOK_CONFIG = {
 
 const ANSWER_KEYS = ['answer', 'output', 'response', 'message', 'content', 'text'] as const;
 const WRAPPER_KEYS = ['data', 'json', 'body', 'result'] as const;
+const PRODUCTION_ORIGIN = 'https://chat.rockcreekwellness.com';
 
 function isChatbotType(value: unknown): value is ChatbotType {
   return value === 'nurse' || value === 'sop';
@@ -101,7 +102,7 @@ function findAnswer(value: unknown, depth = 0): string | null {
 function getAnswerFromWebhookResponse(rawBody: string): string {
   const trimmedBody = rawBody.trim();
   if (!trimmedBody) {
-    throw new HttpError('Chat service returned an empty response', 502);
+    throw new HttpError('Chat service returned no response body from n8n', 502);
   }
 
   try {
@@ -148,8 +149,10 @@ export default {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
+          Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          Origin: PRODUCTION_ORIGIN,
         },
         body: JSON.stringify({
           text: message,
