@@ -24,6 +24,9 @@ const WEBHOOK_CONFIG = {
   },
 } satisfies Record<ChatbotType, { url: string; token: string }>;
 
+const ANSWER_KEYS = ['answer', 'output', 'response', 'message', 'content', 'text'] as const;
+const WRAPPER_KEYS = ['data', 'json', 'body', 'result'] as const;
+
 function isChatbotType(value: unknown): value is ChatbotType {
   return value === 'nurse' || value === 'sop';
 }
@@ -48,22 +51,73 @@ function normalizeSessionId(value: unknown): string {
   return value;
 }
 
+function findAnswer(value: unknown, depth = 0): string | null {
+  if (depth > 5) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const answer = value.trim();
+    return answer || null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const answer = findAnswer(item, depth + 1);
+      if (answer) {
+        return answer;
+      }
+    }
+    return null;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  for (const key of ANSWER_KEYS) {
+    if (key in record) {
+      const answer = findAnswer(record[key], depth + 1);
+      if (answer) {
+        return answer;
+      }
+    }
+  }
+
+  for (const key of WRAPPER_KEYS) {
+    if (key in record) {
+      const answer = findAnswer(record[key], depth + 1);
+      if (answer) {
+        return answer;
+      }
+    }
+  }
+
+  return null;
+}
+
 function getAnswerFromWebhookResponse(rawBody: string): string {
-  if (!rawBody) {
-    return 'Response received';
+  const trimmedBody = rawBody.trim();
+  if (!trimmedBody) {
+    throw new HttpError('Chat service returned an empty response', 502);
   }
 
   try {
-    const data = JSON.parse(rawBody) as Record<string, unknown>;
-    const answer = data.answer || data.response || data.message;
-    if (typeof answer === 'string' && answer.trim()) {
+    const data = JSON.parse(trimmedBody) as unknown;
+    const answer = findAnswer(data);
+    if (answer) {
       return answer;
     }
-  } catch {
-    return rawBody;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return trimmedBody;
+    }
+    throw error;
   }
 
-  return 'Response received';
+  throw new HttpError('Chat service returned an unexpected response', 502);
 }
 
 export default {
