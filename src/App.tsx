@@ -25,7 +25,7 @@ function App() {
 
       try {
         const verifiedUser = await verifyGoogleCredential(token);
-        saveAuthData(token, verifiedUser);
+        saveAuthData(token);
         setUser(verifiedUser);
       } catch {
         clearAuthData();
@@ -42,7 +42,7 @@ function App() {
 
     try {
       const verifiedUser = await verifyGoogleCredential(credential);
-      saveAuthData(credential, verifiedUser);
+      saveAuthData(credential);
       setUser(verifiedUser);
     } catch (loginError) {
       setAuthError(
