@@ -14,26 +14,20 @@ export function getAuthToken(): string | null {
 
 export function getUserData(): GoogleUser | null {
   const data = localStorage.getItem(USER_KEY);
-  return data ? JSON.parse(data) : null;
+
+  if (!data) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(data) as GoogleUser;
+  } catch {
+    clearAuthData();
+    return null;
+  }
 }
 
 export function clearAuthData() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
-}
-
-export function decodeJWT(token: string): any {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch (error) {
-    return null;
-  }
 }
