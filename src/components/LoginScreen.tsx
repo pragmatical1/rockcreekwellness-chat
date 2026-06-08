@@ -1,30 +1,132 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface LoginScreenProps {
   onLogin: (credential: string) => void;
   error?: string;
 }
 
+interface CredentialResponse {
+  credential?: string;
+}
+
+const SCRIPT_ID = 'google-gsi-script';
+const FALLBACK_TIMEOUT = 5000;
+const POLL_MAX_ATTEMPTS = 50;
+const POLL_INTERVAL = 100;
+
 export function LoginScreen({ onLogin, error }: LoginScreenProps) {
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const [showFallback, setShowFallback] = useState(false);
+  const pollTimerRef = useRef<<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (window.google && googleButtonRef.current) {
+    let cancelled = false;
+    let fallbackTimer: ReturnType<typeof setTimeout>;
+
+    function clearPollTimer() {
+      if (pollTimerRef.current !== null) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    }
+
+    function initializeGoogle() {
+      if (cancelled) return;
+
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+      if (!clientId) return;
+
       window.google.accounts.id.initialize({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-        callback: (response: any) => {
-          onLogin(response.credential);
+        client_id: clientId,
+        callback: (response: CredentialResponse) => {
+          if (response.credential) {
+            onLogin(response.credential);
+          }
         },
         auto_select: false,
       });
 
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        width: 280,
-      });
+      if (googleButtonRef.current) {
+        googleButtonRef.current.innerHTML = '';
+
+        const availableWidth = googleButtonRef.current.offsetWidth;
+        const buttonWidth = Math.min(280, availableWidth || 280);
+
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          text: 'signin_with',
+          width: buttonWidth,
+        });
+      }
+
+      clearTimeout(fallbackTimer);
+      setShowFallback(false);
     }
+
+    function waitForGoogle(attempts = 0) {
+      if (cancelled) return;
+      if (window.google?.accounts?.id) {
+        initializeGoogle();
+        return;
+      }
+      if (attempts < POLL_MAX_ATTEMPTS) {
+        pollTimerRef.current = setTimeout(() => {
+          waitForGoogle(attempts + 1);
+        }, POLL_INTERVAL);
+      }
+    }
+
+    function loadGoogleScript() {
+      if (window.google?.accounts?.id) {
+        initializeGoogle();
+        return;
+      }
+
+      const existingScript = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
+      if (existingScript) {
+        existingScript.addEventListener('load', () => {
+          if (window.google?.accounts?.id) {
+            initializeGoogle();
+          } else {
+            waitForGoogle();
+          }
+        });
+        existingScript.addEventListener('error', () => {
+          if (!cancelled) setShowFallback(true);
+        });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.id = SCRIPT_ID;
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        if (window.google?.accounts?.id) {
+          initializeGoogle();
+        } else {
+          waitForGoogle();
+        }
+      };
+      script.onerror = () => {
+        if (!cancelled) setShowFallback(true);
+      };
+      document.head.appendChild(script);
+    }
+
+    fallbackTimer = setTimeout(() => {
+      if (!cancelled) setShowFallback(true);
+    }, FALLBACK_TIMEOUT);
+
+    loadGoogleScript();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(fallbackTimer);
+      clearPollTimer();
+    };
   }, [onLogin]);
 
   return (
@@ -52,7 +154,13 @@ export function LoginScreen({ onLogin, error }: LoginScreenProps) {
           </div>
         )}
 
-        <div ref={googleButtonRef} className="flex justify-center"></div>
+        <div ref={googleButtonRef} className="flex justify-center w-full"></div>
+
+        {showFallback && (
+          <p className="mt-4 text-sm text-amber-700">
+            Google Sign-In is taking longer than expected. Refresh the page or contact support.
+          </p>
+        )}
 
         <p className="mt-6 text-xs text-gray-500">
           Access restricted to Rock Creek Wellness staff
