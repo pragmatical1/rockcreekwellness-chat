@@ -27,7 +27,7 @@ export default tseslint.config(
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
-    files: ['netlify/functions/**/*.mts'],
+    files: ['api/**/*.ts'],
     languageOptions: {
       ecmaVersion: 2022,
       globals: globals.node,
