@@ -1,65 +1,80 @@
-import { ChatbotType } from '../types';
+import { ChatbotType, GoogleUser } from '../types';
 
-const WEBHOOK_URLS = {
-  nurse: import.meta.env.VITE_N8N_WEBHOOK_URL_NURSE || '',
-  sop: import.meta.env.VITE_N8N_WEBHOOK_URL_SOP || '',
-};
+interface AuthResponse {
+  user: Omit<GoogleUser, 'token'>;
+}
 
-const WEBHOOK_TOKENS = {
-  nurse: import.meta.env.VITE_N8N_WEBHOOK_TOKEN || '',
-  sop: import.meta.env.VITE_N8N_WEBHOOK_TOKEN_SOP || '',
-};
+interface ChatResponse {
+  answer: string;
+}
+
+interface ErrorResponse {
+  error?: string;
+}
 
 function getOrCreateSessionId(): string {
-  const SESSION_KEY = 'nurse_assistant_session_id';
-  let sessionId = sessionStorage.getItem(SESSION_KEY);
+  const sessionKey = 'nurse_assistant_session_id';
+  let sessionId = sessionStorage.getItem(sessionKey);
 
   if (!sessionId) {
     sessionId = crypto.randomUUID();
-    sessionStorage.setItem(SESSION_KEY, sessionId);
+    sessionStorage.setItem(sessionKey, sessionId);
   }
 
   return sessionId;
 }
 
-export async function sendMessageToWebhook(
-  message: string,
-  chatbotType: ChatbotType
-): Promise<string> {
-  const webhookUrl = WEBHOOK_URLS[chatbotType];
-  const webhookToken = WEBHOOK_TOKENS[chatbotType];
-
-  if (!webhookUrl) {
-    throw new Error('Webhook URL not configured for this chatbot');
+async function getErrorMessage(response: Response, fallback: string): Promise<string> {
+  try {
+    const data = (await response.json()) as ErrorResponse;
+    return data.error || fallback;
+  } catch {
+    return fallback;
   }
+}
 
-  if (!webhookToken) {
-    throw new Error('Webhook token not configured for this chatbot');
-  }
-
-  const sessionId = getOrCreateSessionId();
-
-  const response = await fetch(webhookUrl, {
+export async function verifyGoogleCredential(credential: string): Promise<GoogleUser> {
+  const response = await fetch('/api/auth', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${webhookToken}`,
-      'Origin': 'https://chat.rockcreekwellness.com',
+    },
+    body: JSON.stringify({ credential }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response, 'Unable to verify Google sign-in'));
+  }
+
+  const data = (await response.json()) as AuthResponse;
+  return {
+    ...data.user,
+    token: credential,
+  };
+}
+
+export async function sendMessageToWebhook(
+  message: string,
+  chatbotType: ChatbotType,
+  credential: string
+): Promise<string> {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${credential}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      text: message,
-      sessionId: sessionId
+      message,
+      chatbotType,
+      sessionId: getOrCreateSessionId(),
     }),
   });
 
-  if (response.status === 401) {
-    throw new Error('Unauthorized origin or invalid token. Please try logging in again.');
-  }
-
   if (!response.ok) {
-    throw new Error('Failed to send message');
+    throw new Error(await getErrorMessage(response, 'Failed to send message'));
   }
 
-  const data = await response.json();
-  return data.answer || data.response || data.message || 'Response received';
+  const data = (await response.json()) as ChatResponse;
+  return data.answer || 'Response received';
 }
