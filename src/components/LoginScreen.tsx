@@ -1,35 +1,144 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface LoginScreenProps {
   onLogin: (credential: string) => void;
   error?: string;
 }
 
+interface CredentialResponse {
+  credential?: string;
+}
+
+const SCRIPT_ID = 'google-gsi-script';
+const FALLBACK_TIMEOUT = 5000;
+const POLL_MAX_ATTEMPTS = 50;
+const POLL_INTERVAL = 100;
+
 export function LoginScreen({ onLogin, error }: LoginScreenProps) {
   const googleButtonRef = useRef<HTMLDivElement>(null);
+  const onLoginRef = useRef(onLogin);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showFallback, setShowFallback] = useState(false);
 
   useEffect(() => {
-    if (window.google && googleButtonRef.current) {
-      window.google.accounts.id.initialize({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
-        callback: (response: any) => {
-          onLogin(response.credential);
+    onLoginRef.current = onLogin;
+  }, [onLogin]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let fallbackTimer: ReturnType<typeof setTimeout>;
+    let script: HTMLScriptElement | null = null;
+
+    function clearPollTimer() {
+      if (pollTimerRef.current !== null) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    }
+
+    function initializeGoogle() {
+      if (cancelled) return;
+
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+      if (!clientId) {
+        setShowFallback(true);
+        return;
+      }
+
+      window.google?.accounts.id.initialize({
+        client_id: clientId,
+        callback: (response: CredentialResponse) => {
+          if (response.credential) {
+            onLoginRef.current(response.credential);
+          }
         },
         auto_select: false,
       });
 
-      window.google.accounts.id.renderButton(googleButtonRef.current, {
-        theme: 'outline',
-        size: 'large',
-        text: 'signin_with',
-        width: 280,
-      });
+      if (googleButtonRef.current) {
+        googleButtonRef.current.innerHTML = '';
+        const availableWidth = googleButtonRef.current.offsetWidth;
+        const buttonWidth = Math.min(280, availableWidth || 280);
+
+        window.google?.accounts.id.renderButton(googleButtonRef.current, {
+          theme: 'outline',
+          size: 'large',
+          text: 'signin_with',
+          width: buttonWidth,
+        });
+      }
+
+      clearPollTimer();
+      clearTimeout(fallbackTimer);
+      setShowFallback(false);
     }
-  }, [onLogin]);
+
+    function waitForGoogle(attempts = 0) {
+      if (cancelled) return;
+
+      if (window.google?.accounts?.id) {
+        initializeGoogle();
+        return;
+      }
+
+      if (attempts < POLL_MAX_ATTEMPTS) {
+        pollTimerRef.current = setTimeout(() => {
+          waitForGoogle(attempts + 1);
+        }, POLL_INTERVAL);
+      }
+    }
+
+    function handleScriptLoad() {
+      waitForGoogle();
+    }
+
+    function handleScriptError() {
+      if (!cancelled) {
+        setShowFallback(true);
+      }
+    }
+
+    function loadGoogleScript() {
+      if (window.google?.accounts?.id) {
+        initializeGoogle();
+        return;
+      }
+
+      script = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
+      if (!script) {
+        script = document.createElement('script');
+        script.id = SCRIPT_ID;
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
+
+      script.addEventListener('load', handleScriptLoad);
+      script.addEventListener('error', handleScriptError);
+      waitForGoogle();
+    }
+
+    fallbackTimer = setTimeout(() => {
+      if (!cancelled) {
+        setShowFallback(true);
+      }
+    }, FALLBACK_TIMEOUT);
+
+    loadGoogleScript();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(fallbackTimer);
+      clearPollTimer();
+      script?.removeEventListener('load', handleScriptLoad);
+      script?.removeEventListener('error', handleScriptError);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0C648E] to-white flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6 sm:p-8 text-center">
         <div className="flex justify-center mb-6">
           <img
             src="/nurse-assistant-chatbot-icon.jpg"
@@ -47,12 +156,18 @@ export function LoginScreen({ onLogin, error }: LoginScreenProps) {
         <h2 className="text-xl font-semibold text-gray-800 mb-8">AI Agent Chatbot</h2>
 
         {error && (
-          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-md">
+          <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-md" role="alert">
             <p className="text-sm text-red-800">{error}</p>
           </div>
         )}
 
-        <div ref={googleButtonRef} className="flex justify-center"></div>
+        <div ref={googleButtonRef} className="flex justify-center w-full"></div>
+
+        {showFallback && (
+          <p className="mt-4 text-sm text-amber-700" role="status">
+            Google Sign-In is taking longer than expected. Refresh the page or contact support.
+          </p>
+        )}
 
         <p className="mt-6 text-xs text-gray-500">
           Access restricted to Rock Creek Wellness staff
