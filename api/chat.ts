@@ -106,7 +106,7 @@ export default {
 
       const responseBody = await response.text();
       if (!response.ok) {
-        console.error('n8n webhook request failed', response.status, responseBody.slice(0, 500));
+        console.error('n8n webhook request failed', response.status);
         throw new HttpError('Failed to send message', 502);
       }
 
