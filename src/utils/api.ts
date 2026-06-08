@@ -72,7 +72,12 @@ export async function sendMessageToWebhook(
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, 'Failed to send message'));
+    const message = await getErrorMessage(response, 'Failed to send message');
+    if (response.status === 401 || response.status === 403) {
+      throw new Error(`Access restricted: ${message}`);
+    }
+
+    throw new Error(message);
   }
 
   const data = (await response.json()) as ChatResponse;
