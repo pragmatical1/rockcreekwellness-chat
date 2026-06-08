@@ -4,50 +4,51 @@ import { LoginScreen } from './components/LoginScreen';
 import { ChatInterface } from './components/ChatInterface';
 import { ChatbotSelector } from './components/ChatbotSelector';
 import { Message, GoogleUser, ChatbotType } from './types';
-import { saveAuthData, getAuthToken, getUserData, clearAuthData, decodeJWT } from './utils/auth';
-import { sendMessageToWebhook } from './utils/api';
+import { saveAuthData, getAuthToken, clearAuthData } from './utils/auth';
+import { sendMessageToWebhook, verifyGoogleCredential } from './utils/api';
 
 function App() {
   const [user, setUser] = useState<GoogleUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [authError, setAuthError] = useState<string>('');
   const [selectedChatbot, setSelectedChatbot] = useState<ChatbotType>('nurse');
 
   useEffect(() => {
-    const token = getAuthToken();
-    const userData = getUserData();
+    async function restoreSession() {
+      const token = getAuthToken();
+      if (!token) {
+        setIsCheckingAuth(false);
+        return;
+      }
 
-    if (token && userData) {
-      setUser(userData);
+      try {
+        const verifiedUser = await verifyGoogleCredential(token);
+        saveAuthData(token);
+        setUser(verifiedUser);
+      } catch {
+        clearAuthData();
+      } finally {
+        setIsCheckingAuth(false);
+      }
     }
+
+    void restoreSession();
   }, []);
 
-  const handleLogin = (credential: string) => {
+  const handleLogin = async (credential: string) => {
     setAuthError('');
 
-    const decoded = decodeJWT(credential);
-    if (!decoded) {
-      setAuthError('Failed to process authentication');
-      return;
+    try {
+      const verifiedUser = await verifyGoogleCredential(credential);
+      saveAuthData(credential);
+      setUser(verifiedUser);
+    } catch (loginError) {
+      setAuthError(
+        loginError instanceof Error ? loginError.message : 'Failed to process authentication'
+      );
     }
-
-    const email = decoded.email || '';
-    if (!email.endsWith('@rockcreekwellness.com')) {
-      setAuthError('Access restricted to Rock Creek Wellness staff only');
-      return;
-    }
-
-    const userData: GoogleUser = {
-      id: decoded.sub,
-      email: decoded.email,
-      name: decoded.name,
-      picture: decoded.picture,
-      token: credential,
-    };
-
-    saveAuthData(credential, userData);
-    setUser(userData);
   };
 
   const handleChatbotChange = (chatbot: ChatbotType) => {
@@ -66,7 +67,7 @@ function App() {
   };
 
   const handleSendMessage = async (content: string) => {
-    if (selectedChatbot === 'sop') {
+    if (selectedChatbot === 'sop' || !user) {
       return;
     }
 
@@ -81,7 +82,7 @@ function App() {
     setIsLoading(true);
 
     try {
-      const response = await sendMessageToWebhook(content, selectedChatbot);
+      const response = await sendMessageToWebhook(content, selectedChatbot, user.token);
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -91,18 +92,20 @@ function App() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.message.includes('Access restricted')) {
+    } catch (requestError) {
+      if (requestError instanceof Error) {
+        const isAuthError = requestError.message.includes('Access restricted');
+
+        if (isAuthError) {
           clearAuthData();
           setUser(null);
-          setAuthError(error.message);
+          setAuthError(requestError.message);
           setMessages([]);
         } else {
           const errorMessage: Message = {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: `Error: ${error.message}`,
+            content: `Error: ${requestError.message}`,
             timestamp: Date.now(),
           };
           setMessages((prev) => [...prev, errorMessage]);
@@ -112,6 +115,14 @@ function App() {
       setIsLoading(false);
     }
   };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#0C648E] to-white flex items-center justify-center">
+        <p className="text-sm font-medium text-white">Verifying access...</p>
+      </div>
+    );
+  }
 
   if (!user) {
     return <LoginScreen onLogin={handleLogin} error={authError} />;
